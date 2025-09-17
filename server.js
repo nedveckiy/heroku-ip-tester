@@ -9,8 +9,8 @@ const PORT = process.env.PORT || 3000;
 // Конфігурація для тестування
 const CONFIG = {
     testQuery: 'test search query site:example.com',
-    delayBetweenRequests: 2000, // 2 секунди
-    maxRequestsPerTest: 20,
+    delayBetweenRequests: 1000, // 1 секунда
+    maxRequestsPerTest: 1,      // 1 запит
     logFile: 'ip_rotation_log.txt'
 };
 
