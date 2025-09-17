@@ -227,6 +227,82 @@ app.get('/restart-hint', (req, res) => {
     });
 });
 
+// Стрес-тест: запити кожну секунду до падіння
+app.get('/stress-test', async (req, res) => {
+    console.log('🔥 Початок стрес-тесту');
+    
+    const results = {
+        startTime: new Date().toISOString(),
+        initialIP: await getCurrentIP(),
+        requests: [],
+        isRunning: true
+    };
+    
+    res.json({ message: 'Стрес-тест запущений. Дивіться логи.', initialIP: results.initialIP });
+    
+    let requestCount = 0;
+    const stressInterval = setInterval(async () => {
+        if (!results.isRunning) {
+            clearInterval(stressInterval);
+            return;
+        }
+        
+        requestCount++;
+        console.log(`🚀 Стрес-запит #${requestCount}`);
+        
+        try {
+            const testResult = await testGoogleSearch('stress test', requestCount);
+            const logEntry = {
+                requestNumber: requestCount,
+                ip: results.initialIP,
+                timestamp: new Date().toISOString(),
+                ...testResult
+            };
+            
+            results.requests.push(logEntry);
+            await logResult(logEntry);
+            
+            if (!testResult.success) {
+                console.log(`💥 Перший провал на запиті #${requestCount}`);
+            }
+            
+        } catch (error) {
+            console.log(`💀 КРИТИЧНА ПОМИЛКА на запиті #${requestCount}:`, error.message);
+            results.isRunning = false;
+            clearInterval(stressInterval);
+            
+            // Записуємо результати краху
+            const crashReport = {
+                ...results,
+                crashedAt: requestCount,
+                crashTime: new Date().toISOString(),
+                error: error.message
+            };
+            
+            await fs.writeFile('crash_report.json', JSON.stringify(crashReport, null, 2));
+            console.log('📄 Звіт про крах збережено в crash_report.json');
+        }
+    }, 1000); // Кожну секунду
+    
+    // Автоматичне зупинення через 10 хвилин якщо не впаде
+    setTimeout(() => {
+        if (results.isRunning) {
+            results.isRunning = false;
+            clearInterval(stressInterval);
+            console.log('⏰ Стрес-тест зупинений через 10 хвилин');
+        }
+    }, 600000);
+});
+
+app.get('/crash-report', async (req, res) => {
+    try {
+        const report = await fs.readFile('crash_report.json', 'utf-8');
+        res.json(JSON.parse(report));
+    } catch (error) {
+        res.status(404).json({ error: 'Звіт про крах не знайдено' });
+    }
+});
+
 // Запуск сервера
 app.listen(PORT, () => {
     console.log(`🌐 Сервер запущений на порту ${PORT}`);
