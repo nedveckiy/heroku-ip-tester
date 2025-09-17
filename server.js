@@ -129,7 +129,7 @@ async function runIPRotationTest() {
             break;
         }
         
-        // Затримка між запитами
+        // Затримка між запитами - точно 1 секунда
         if (i < CONFIG.maxRequestsPerTest) {
             console.log(`⏱️  Очікування ${CONFIG.delayBetweenRequests}ms...`);
             await new Promise(resolve => setTimeout(resolve, CONFIG.delayBetweenRequests));
@@ -163,18 +163,151 @@ async function runIPRotationTest() {
 // API endpoints
 app.get('/', (req, res) => {
     res.send(`
-        <h1>🔄 Heroku IP Rotation Tester</h1>
-        <p><strong>Поточний час:</strong> ${new Date().toLocaleString()}</p>
-        <h2>Доступні ендпоінти:</h2>
-        <ul>
-            <li><a href="/test">GET /test</a> - Запустити тест</li>
-            <li><a href="/ip">GET /ip</a> - Перевірити поточний IP</li>
-            <li><a href="/logs">GET /logs</a> - Переглянути логи</li>
-            <li><a href="/results">GET /results</a> - Останні результати</li>
-            <li><a href="/stress-test">GET /stress-test</a> - Стрес-тест (запити кожну секунду)</li>
-            <li><a href="/crash-report">GET /crash-report</a> - Звіт про крах системи</li>
-            <li><a href="/restart-hint">GET /restart-hint</a> - Інструкції для ротації IP</li>
-        </ul>
+        <!DOCTYPE html>
+        <html lang="uk">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>🔄 Heroku IP Rotation Tester</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #f5f5f5;
+                }
+                .container {
+                    background: white;
+                    padding: 30px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                h1 {
+                    color: #333;
+                    text-align: center;
+                }
+                .status {
+                    text-align: center;
+                    background: #e3f2fd;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                }
+                .buttons {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 15px;
+                    margin: 30px 0;
+                }
+                .btn {
+                    padding: 15px 20px;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 16px;
+                    text-decoration: none;
+                    display: inline-block;
+                    text-align: center;
+                    transition: background-color 0.3s;
+                }
+                .btn-primary { background: #2196F3; color: white; }
+                .btn-success { background: #4CAF50; color: white; }
+                .btn-warning { background: #FF9800; color: white; }
+                .btn-danger { background: #f44336; color: white; }
+                .btn-info { background: #17a2b8; color: white; }
+                .btn-secondary { background: #6c757d; color: white; }
+                .btn:hover {
+                    opacity: 0.9;
+                    transform: translateY(-2px);
+                }
+                .stress-controls {
+                    background: #fff3cd;
+                    padding: 20px;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                    border-left: 4px solid #ffc107;
+                }
+                .stress-controls h3 {
+                    margin-top: 0;
+                    color: #856404;
+                }
+                ul {
+                    list-style: none;
+                    padding: 0;
+                }
+                li {
+                    margin: 10px 0;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔄 Heroku IP Rotation Tester</h1>
+                
+                <div class="status">
+                    <strong>🕐 Поточний час:</strong> ${new Date().toLocaleString('uk-UA')}<br>
+                    <strong>⚡ Статус:</strong> <span id="server-status">Активний</span>
+                </div>
+
+                <div class="buttons">
+                    <a href="/ip" class="btn btn-primary">🌐 Перевірити IP</a>
+                    <a href="/test" class="btn btn-success">🧪 Запустити тест</a>
+                    <a href="/logs" class="btn btn-info">📋 Переглянути логи</a>
+                    <a href="/results" class="btn btn-secondary">📊 Останні результати</a>
+                </div>
+
+                <div class="stress-controls">
+                    <h3>⚠️ Стрес-тестування</h3>
+                    <p>Запити кожну секунду з затримкою 1000мс до краху системи</p>
+                    <div class="buttons">
+                        <a href="/stress-test" class="btn btn-warning">🔥 Запустити стрес-тест</a>
+                        <button onclick="stopStressTest()" class="btn btn-danger">🛑 STOP Стрес-тест</button>
+                    </div>
+                    <div class="buttons">
+                        <a href="/crash-report" class="btn btn-secondary">📄 Звіт про крах</a>
+                        <a href="/restart-hint" class="btn btn-info">🔄 Як ротувати IP</a>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                async function stopStressTest() {
+                    try {
+                        const response = await fetch('/stop-stress');
+                        const result = await response.json();
+                        alert('✅ ' + result.message);
+                        
+                        // Оновлюємо статус
+                        document.getElementById('server-status').textContent = 'Стрес-тест зупинено';
+                        document.getElementById('server-status').style.color = '#28a745';
+                        
+                    } catch (error) {
+                        alert('❌ Помилка: ' + error.message);
+                    }
+                }
+
+                // Перевірка статусу стрес-тесту кожні 5 секунд
+                setInterval(async () => {
+                    try {
+                        const response = await fetch('/stress-status');
+                        const status = await response.json();
+                        const statusElement = document.getElementById('server-status');
+                        
+                        if (status.running) {
+                            statusElement.textContent = 'Стрес-тест активний (' + status.requestCount + ' запитів)';
+                            statusElement.style.color = '#dc3545';
+                        } else {
+                            statusElement.textContent = 'Активний';
+                            statusElement.style.color = '#28a745';
+                        }
+                    } catch (error) {
+                        // Ігноруємо помилки статусу
+                    }
+                }, 5000);
+            </script>
+        </body>
+        </html>
     `);
 });
 
@@ -229,20 +362,24 @@ app.get('/restart-hint', (req, res) => {
     });
 });
 
-// Глобальна змінна для контролю стрес-тесту
+// Глобальні змінні для контролю стрес-тесту
 let stressTestRunning = false;
+let stressRequestCount = 0;
+let stressTestInterval = null;
 
-// Стрес-тест: запити кожну секунду до падіння
+// Стрес-тест: точно 1 запит кожну секунду з затримкою 1000мс
 app.get('/stress-test', async (req, res) => {
     if (stressTestRunning) {
         return res.json({ 
             error: 'Стрес-тест вже запущений!', 
-            message: 'Дочекайтесь завершення або рестартуйте dyno' 
+            message: 'Дочекайтесь завершення або натисніть STOP',
+            currentCount: stressRequestCount
         });
     }
     
     stressTestRunning = true;
-    console.log('🔥 Початок стрес-тесту');
+    stressRequestCount = 0;
+    console.log('🔥 Початок стрес-тесту з інтервалом 1000мс');
     
     const results = {
         startTime: new Date().toISOString(),
@@ -251,22 +388,28 @@ app.get('/stress-test', async (req, res) => {
         isRunning: true
     };
     
-    res.json({ message: 'Стрес-тест запущений. Дивіться логи.', initialIP: results.initialIP });
+    res.json({ 
+        message: 'Стрес-тест запущений. 1 запит кожну секунду. Дивіться логи.', 
+        initialIP: results.initialIP,
+        interval: '1000ms между запросами'
+    });
     
-    let requestCount = 0;
-    const stressInterval = setInterval(async () => {
-        if (!results.isRunning) {
-            clearInterval(stressInterval);
+    // ФІКСОВАНА затримка - точно 1 секунда між запитами
+    stressTestInterval = setInterval(async () => {
+        if (!stressTestRunning) {
+            clearInterval(stressTestInterval);
+            stressTestInterval = null;
             return;
         }
         
-        requestCount++;
-        console.log(`🚀 Стрес-запит #${requestCount}`);
+        stressRequestCount++;
+        console.log(`🚀 Стрес-запит #${stressRequestCount} [${new Date().toISOString()}]`);
         
         try {
-            const testResult = await testGoogleSearch('stress test', requestCount);
+            // Запит
+            const testResult = await testGoogleSearch('stress test', stressRequestCount);
             const logEntry = {
-                requestNumber: requestCount,
+                requestNumber: stressRequestCount,
                 ip: results.initialIP,
                 timestamp: new Date().toISOString(),
                 ...testResult
@@ -276,42 +419,74 @@ app.get('/stress-test', async (req, res) => {
             await logResult(logEntry);
             
             if (!testResult.success) {
-                console.log(`💥 Перший провал на запиті #${requestCount}`);
+                console.log(`💥 Перший провал на запиті #${stressRequestCount}`);
             }
             
         } catch (error) {
-            console.log(`💀 КРИТИЧНА ПОМИЛКА на запиті #${requestCount}:`, error.message);
-            results.isRunning = false;
-            stressTestRunning = false; // Скидаємо глобальний флаг
-            clearInterval(stressInterval);
+            console.log(`💀 КРИТИЧНА ПОМИЛКА на запиті #${stressRequestCount}:`, error.message);
+            
+            // Зупиняємо тест
+            stressTestRunning = false;
+            if (stressTestInterval) {
+                clearInterval(stressTestInterval);
+                stressTestInterval = null;
+            }
             
             // Записуємо результати краху
             const crashReport = {
                 ...results,
-                crashedAt: requestCount,
+                crashedAt: stressRequestCount,
                 crashTime: new Date().toISOString(),
-                error: error.message
+                error: error.message,
+                totalRequests: stressRequestCount
             };
             
-            await fs.writeFile('crash_report.json', JSON.stringify(crashReport, null, 2));
-            console.log('📄 Звіт про крах збережено в crash_report.json');
+            try {
+                await fs.writeFile('crash_report.json', JSON.stringify(crashReport, null, 2));
+                console.log('📄 Звіт про крах збережено в crash_report.json');
+            } catch (writeError) {
+                console.error('❌ Не вдалося записати звіт про крах:', writeError.message);
+            }
         }
-    }, 1000); // Кожну секунду
+    }, 1000); // ТОЧНО 1000мс = 1 секунда
     
     // Автоматичне зупинення через 10 хвилин якщо не впаде
     setTimeout(() => {
-        if (results.isRunning) {
-            results.isRunning = false;
-            stressTestRunning = false; // Скидаємо глобальний флаг
-            clearInterval(stressInterval);
-            console.log('⏰ Стрес-тест зупинений через 10 хвилин');
+        if (stressTestRunning) {
+            stressTestRunning = false;
+            if (stressTestInterval) {
+                clearInterval(stressTestInterval);
+                stressTestInterval = null;
+            }
+            console.log(`⏰ Стрес-тест зупинений через 10 хвилин. Виконано ${stressRequestCount} запитів`);
         }
-    }, 600000);
+    }, 600000); // 10 хвилин
 });
 
 app.get('/stop-stress', (req, res) => {
-    stressTestRunning = false;
-    res.json({ message: 'Стрес-тест зупинений примусово' });
+    if (stressTestRunning) {
+        stressTestRunning = false;
+        if (stressTestInterval) {
+            clearInterval(stressTestInterval);
+            stressTestInterval = null;
+        }
+        console.log(`🛑 Стрес-тест зупинений примусово після ${stressRequestCount} запитів`);
+        res.json({ 
+            message: `Стрес-тест зупинений після ${stressRequestCount} запитів`,
+            totalRequests: stressRequestCount
+        });
+    } else {
+        res.json({ message: 'Стрес-тест не запущений' });
+    }
+});
+
+// Новий ендпоінт для перевірки статусу
+app.get('/stress-status', (req, res) => {
+    res.json({
+        running: stressTestRunning,
+        requestCount: stressRequestCount,
+        startTime: stressTestRunning ? new Date().toISOString() : null
+    });
 });
 
 app.get('/crash-report', async (req, res) => {
@@ -326,12 +501,25 @@ app.get('/crash-report', async (req, res) => {
 // Запуск сервера
 app.listen(PORT, () => {
     console.log(`🌐 Сервер запущений на порту ${PORT}`);
+    console.log(`🔍 Дашборд: http://localhost:${PORT}/`);
     console.log(`🔍 Перевірте IP: http://localhost:${PORT}/ip`);
     console.log(`🧪 Запустити тест: http://localhost:${PORT}/test`);
+    console.log(`⏱️  Стрес-тест: точно 1000мс між запитами`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('👋 Сервер зупиняється...');
+    
+    // Зупиняємо стрес-тест якщо запущений
+    if (stressTestRunning) {
+        stressTestRunning = false;
+        if (stressTestInterval) {
+            clearInterval(stressTestInterval);
+            stressTestInterval = null;
+        }
+        console.log(`🛑 Стрес-тест зупинений через SIGTERM після ${stressRequestCount} запитів`);
+    }
+    
     process.exit(0);
 });
