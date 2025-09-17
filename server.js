@@ -252,9 +252,7 @@ app.get('/', (req, res) => {
 
                 <div class="buttons">
                     <a href="/ip" class="btn btn-primary">🌐 Перевірити IP</a>
-                    <a href="/test" class="btn btn-success">🧪 Запустити тест</a>
                     <a href="/logs" class="btn btn-info">📋 Переглянути логи</a>
-                    <a href="/results" class="btn btn-secondary">📊 Останні результати</a>
                 </div>
 
                 <div class="stress-controls">
@@ -365,9 +363,9 @@ app.get('/restart-hint', (req, res) => {
 // Глобальні змінні для контролю стрес-тесту
 let stressTestRunning = false;
 let stressRequestCount = 0;
-let stressTestInterval = null;
+// Видаляємо stressTestInterval - більше не потрібен
 
-// Стрес-тест: точно 1 запит кожну секунду з затримкою 1000мс
+// Стрес-тест: ПОСЛІДОВНІ запити без race conditions
 app.get('/stress-test', async (req, res) => {
     if (stressTestRunning) {
         return res.json({ 
@@ -379,7 +377,7 @@ app.get('/stress-test', async (req, res) => {
     
     stressTestRunning = true;
     stressRequestCount = 0;
-    console.log('🔥 Початок стрес-тесту з інтервалом 1000мс');
+    console.log('🔥 Початок ПОСЛІДОВНОГО стрес-тесту (БЕЗ race conditions)');
     
     const results = {
         startTime: new Date().toISOString(),
@@ -389,27 +387,28 @@ app.get('/stress-test', async (req, res) => {
     };
     
     res.json({ 
-        message: 'Стрес-тест запущений. 1 запит кожну секунду. Дивіться логи.', 
+        message: 'ПОСЛІДОВНИЙ стрес-тест запущений. 1 запит -> затримка 1сек -> наступний запит.', 
         initialIP: results.initialIP,
-        interval: '1000ms между запросами'
+        interval: 'Послідовно з затримкою 1000ms'
     });
     
-    // ФІКСОВАНА затримка - точно 1 секунда між запитами
-    stressTestInterval = setInterval(async () => {
+    // ПОСЛІДОВНА функція без race conditions
+    async function sequentialStressTest() {
         if (!stressTestRunning) {
-            clearInterval(stressTestInterval);
-            stressTestInterval = null;
             return;
         }
         
+        // Інкрементуємо ПЕРЕД запитом
         stressRequestCount++;
-        console.log(`🚀 Стрес-запит #${stressRequestCount} [${new Date().toISOString()}]`);
+        const currentRequestNumber = stressRequestCount;
+        
+        console.log(`🚀 Послідовний запит #${currentRequestNumber} [${new Date().toISOString()}]`);
         
         try {
-            // Запит
-            const testResult = await testGoogleSearch('stress test', stressRequestCount);
+            // Виконуємо запит СИНХРОННО
+            const testResult = await testGoogleSearch('stress test', currentRequestNumber);
             const logEntry = {
-                requestNumber: stressRequestCount,
+                requestNumber: currentRequestNumber,
                 ip: results.initialIP,
                 timestamp: new Date().toISOString(),
                 ...testResult
@@ -419,26 +418,27 @@ app.get('/stress-test', async (req, res) => {
             await logResult(logEntry);
             
             if (!testResult.success) {
-                console.log(`💥 Перший провал на запиті #${stressRequestCount}`);
+                console.log(`💥 Перший провал на запиті #${currentRequestNumber}`);
             }
             
+            console.log(`✅ Запит #${currentRequestNumber} завершено, чекаємо 1 секунду...`);
+            
+            // Чекаємо ТОЧНО 1 секунду перед наступним запитом
+            setTimeout(sequentialStressTest, 1000);
+            
         } catch (error) {
-            console.log(`💀 КРИТИЧНА ПОМИЛКА на запиті #${stressRequestCount}:`, error.message);
+            console.log(`💀 КРИТИЧНА ПОМИЛКА на запиті #${currentRequestNumber}:`, error.message);
             
             // Зупиняємо тест
             stressTestRunning = false;
-            if (stressTestInterval) {
-                clearInterval(stressTestInterval);
-                stressTestInterval = null;
-            }
             
             // Записуємо результати краху
             const crashReport = {
                 ...results,
-                crashedAt: stressRequestCount,
+                crashedAt: currentRequestNumber,
                 crashTime: new Date().toISOString(),
                 error: error.message,
-                totalRequests: stressRequestCount
+                totalRequests: currentRequestNumber
             };
             
             try {
@@ -448,16 +448,15 @@ app.get('/stress-test', async (req, res) => {
                 console.error('❌ Не вдалося записати звіт про крах:', writeError.message);
             }
         }
-    }, 1000); // ТОЧНО 1000мс = 1 секунда
+    }
+    
+    // Запускаємо перший запит
+    setTimeout(sequentialStressTest, 1000);
     
     // Автоматичне зупинення через 10 хвилин якщо не впаде
     setTimeout(() => {
         if (stressTestRunning) {
             stressTestRunning = false;
-            if (stressTestInterval) {
-                clearInterval(stressTestInterval);
-                stressTestInterval = null;
-            }
             console.log(`⏰ Стрес-тест зупинений через 10 хвилин. Виконано ${stressRequestCount} запитів`);
         }
     }, 600000); // 10 хвилин
@@ -466,14 +465,12 @@ app.get('/stress-test', async (req, res) => {
 app.get('/stop-stress', (req, res) => {
     if (stressTestRunning) {
         stressTestRunning = false;
-        if (stressTestInterval) {
-            clearInterval(stressTestInterval);
-            stressTestInterval = null;
-        }
-        console.log(`🛑 Стрес-тест зупинений примусово після ${stressRequestCount} запитів`);
+        // Видаляємо stressTestInterval - тепер не використовується
+        console.log(`🛑 ПОСЛІДОВНИЙ стрес-тест зупинений примусово після ${stressRequestCount} запитів`);
         res.json({ 
             message: `Стрес-тест зупинений після ${stressRequestCount} запитів`,
-            totalRequests: stressRequestCount
+            totalRequests: stressRequestCount,
+            method: 'sequential'
         });
     } else {
         res.json({ message: 'Стрес-тест не запущений' });
@@ -514,11 +511,7 @@ process.on('SIGTERM', () => {
     // Зупиняємо стрес-тест якщо запущений
     if (stressTestRunning) {
         stressTestRunning = false;
-        if (stressTestInterval) {
-            clearInterval(stressTestInterval);
-            stressTestInterval = null;
-        }
-        console.log(`🛑 Стрес-тест зупинений через SIGTERM після ${stressRequestCount} запитів`);
+        console.log(`🛑 ПОСЛІДОВНИЙ стрес-тест зупинений через SIGTERM після ${stressRequestCount} запитів`);
     }
     
     process.exit(0);
