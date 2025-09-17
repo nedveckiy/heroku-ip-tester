@@ -171,6 +171,8 @@ app.get('/', (req, res) => {
             <li><a href="/ip">GET /ip</a> - Перевірити поточний IP</li>
             <li><a href="/logs">GET /logs</a> - Переглянути логи</li>
             <li><a href="/results">GET /results</a> - Останні результати</li>
+            <li><a href="/stress-test">GET /stress-test</a> - Стрес-тест (запити кожну секунду)</li>
+            <li><a href="/crash-report">GET /crash-report</a> - Звіт про крах системи</li>
             <li><a href="/restart-hint">GET /restart-hint</a> - Інструкції для ротації IP</li>
         </ul>
     `);
