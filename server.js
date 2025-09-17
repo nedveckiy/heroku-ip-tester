@@ -229,8 +229,19 @@ app.get('/restart-hint', (req, res) => {
     });
 });
 
+// Глобальна змінна для контролю стрес-тесту
+let stressTestRunning = false;
+
 // Стрес-тест: запити кожну секунду до падіння
 app.get('/stress-test', async (req, res) => {
+    if (stressTestRunning) {
+        return res.json({ 
+            error: 'Стрес-тест вже запущений!', 
+            message: 'Дочекайтесь завершення або рестартуйте dyno' 
+        });
+    }
+    
+    stressTestRunning = true;
     console.log('🔥 Початок стрес-тесту');
     
     const results = {
@@ -271,6 +282,7 @@ app.get('/stress-test', async (req, res) => {
         } catch (error) {
             console.log(`💀 КРИТИЧНА ПОМИЛКА на запиті #${requestCount}:`, error.message);
             results.isRunning = false;
+            stressTestRunning = false; // Скидаємо глобальний флаг
             clearInterval(stressInterval);
             
             // Записуємо результати краху
@@ -290,10 +302,16 @@ app.get('/stress-test', async (req, res) => {
     setTimeout(() => {
         if (results.isRunning) {
             results.isRunning = false;
+            stressTestRunning = false; // Скидаємо глобальний флаг
             clearInterval(stressInterval);
             console.log('⏰ Стрес-тест зупинений через 10 хвилин');
         }
     }, 600000);
+});
+
+app.get('/stop-stress', (req, res) => {
+    stressTestRunning = false;
+    res.json({ message: 'Стрес-тест зупинений примусово' });
 });
 
 app.get('/crash-report', async (req, res) => {
